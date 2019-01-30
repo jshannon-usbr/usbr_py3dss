@@ -27,9 +27,9 @@ CATALOGUNIT=12
 CONDUNIT = 13
 
 
-dll_path = r'C:\Users\jmgilbert\01_Programs' +\
-r'\Excel_DSS_Add-in_V3.3_Distribution-2015-01-28' +\
-r'\Excel DSS Add-in V3.3.jmg\libraries\64-bit\heclib_x64.dll'
+#2018-09-04 (JAS): dll_path below modified to reference path on JAS's machine.
+dll_path = (r'C:\Users\jshannon\Desktop\New Excel DSS Add-In\New DSS Add-in' + 
+            r'\Excel DSS Add-in V3.3 x64\heclib_x64.dll')
 dsslib = C.cdll.LoadLibrary(dll_path)
 
 def open_dss(fpi):
@@ -89,6 +89,23 @@ def read_regts(ifltab, cpath, cdate, ctime, nvalsi):
 
 def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     '''
+    Returns
+    -------
+    - 0 : nvals.value
+    - 1 : dVals
+    - 2 : cunits[0:].decode('utf-8').strip()
+    - 3 : ctype[0:].decode('utf-8').strip()
+    - 4 : iofset.value
+    - 5 : istat.value
+    - 6 : csupp[0:].decode('utf-8')
+    - 7 : coords_info
+    - 8 : ctzone[0:].decode('utf-8')
+    - 9 : jqual
+    - 10 : lfildob
+    - 11 : itzone
+
+    Notes
+    -----
     # Args: (IFLTAB(600)  | CPATH*80   | CDATE   | CTIME   | KVALS   | NVALS   | 
     #        INPUT        | INPUT      | INPUT   | INPUT   | INPUT   | OUTPUT   | OUTPUT    | OUTPUT | OUTPUT    | OUTPUT)
     # DTYPE:(INTEGER(600) | CHAR*80    | CHAR*20 | CHAR*4  | INTEGER | INTEGER | 
@@ -101,6 +118,7 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     
     #Args: ICDESC |LCOORDS | ISTAT | L_CPATH | L_CDATE | L_CTIME | L_CUNITS | L_CTYPE | L_CSUPP | L_CTZONE)
     #      INTEGER|INTEGER |INTEGER| INTEGER | INTEGER | INTEGER | INTEGER  | INTEGER | INTEGER | INTEGER 
+
     '''
     zrrtsc = getattr(dsslib, 'ZRRTSC_')
     zrrtsc.argparse = [
@@ -144,7 +162,7 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     l_ctzone = len(ctzone)
     
     zrrtsc(ifltab, ecpath, ecdate, ectime, C.byref(kvals), C.byref(nvals), C.byref(lgetdob), C.byref(lfildob),   #8
-           C.byref(sVals), C.byref(dVals), C.byref(jqual), C.byref(lqual), C.byref(lqread),    #+5 = 13
+           C.byref(sVals),  C.byref(dVals), C.byref(jqual), C.byref(lqual), C.byref(lqread),    #+5 = 13
            cunits, ctype, csupp, C.byref(iofset), C.byref(jcomp), C.byref(itzone),            #+6 = 19
            ctzone, C.byref(coords), C.byref(icdesc), C.byref(lcoords), C.byref(istat),        #+5 = 24
            l_cpath, l_cdate, l_ctime, l_cunits, l_ctype, l_csupp, l_ctzone)                   #7 = 31
@@ -178,7 +196,7 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     
     return([nvals.value, dVals, cunits[0:].decode('utf-8').strip(), ctype[0:].decode('utf-8').strip(),
             iofset.value, istat.value, csupp[0:].decode('utf-8'), coords_info, ctzone[0:].decode('utf-8'), jqual, lfildob, itzone])
-    
+
 #            ByVal strCDate As String, ByVal strCTime As String, _
 #            lngKVals As Long, lngNVals As Long, lngLGETDOB As Long, _
 #            lngLFILDOB As Long, sngValues As Single, dblValues As Double, _
@@ -236,7 +254,7 @@ def icdesc_to_dict(coords, icdesc):
         coords_info['DatumUnit'] = ['Unknown', None]
     
     datum = icdesc[3]
-    print("Datum from file is: %s" %datum)
+    #print("Datum from file is: %s" %datum)
     if datum==0:
         coords_info['Datum'] = ['Not specified', 0]
     elif datum==1:
@@ -384,10 +402,424 @@ def write_regts(ifltab, cpath, cdate, ctime, nvalsi, valsi, cunits, ctype,_IPLAN
     zsrts(C.byref(ifltab), cpath.encode('ascii'), cdate.encode('ascii'), ctime.encode('ascii'),
           C.byref(nvals), C.byref(vals), cunits.encode('ascii'), ctype.encode('ascii'),C.byref(IPLAN), C.byref(istat), \
           len(cpath), len(cdate), len(ctime), len(cunits), len(ctype))
-    
+
     return([istat])
-    
-    
+
+
+def write_regtsd(ifltab, cpath, cdate, ctime, vals, cunits, ctype,
+                 coords=[0.0, 0.0, 0.0], icdesc=[0, 0, 0, 0, 0, 0],
+                 csupp='', ctzone='', iplan=0):
+    """
+    Summary
+    -------
+    Python function to extract regular time series and supplemental information
+    from DSS file. This function was written with guidance from HECLIB
+    documentation of 'ZSRTSX' [1]_ and source code in DSSExcel.xlam [2]_.
+
+    Parameters
+    ----------
+    ifltab : c_long_Array_600
+        Integer long returned when opening a DSS file with open_dss().
+    cpath : str
+        Pathname of regular time series to be stored.
+    cdate : str
+        Starting date of regular time series in "DDMMMYYYY" format. If the year
+        is in the 1900s, date can be in "DDMMMYY" format.
+    ctime : str
+        Time since midnight of starting date.
+    vals : list of float
+        Sequential list of regular time series.
+    cunits : str
+        Units of time series data.
+    ctype : str
+        Type of time series data (e.g. 'PER-AVER', 'PER-CUM', 'INST-VAL')
+    coords : list of float, default [0.0, 0.0, 0.0], optional
+        Coordinates of time series data.
+
+        - coords[0] : X-coordinate
+        - coords[1] : Y-coordinate
+        - coords[2] : Unknown; default set to 0.
+
+    icdesc : list of int, default [0, 0, 0, 0, 0, 0], optional
+        Metadata for coordinates of time series data.
+
+        +------------+-----------------------------------------------------+
+        | List Entry | Description                                         |
+        +============+=====================================================+
+        | icdesc[0]  | One of the following options for Coordinate System. |
+        |            |                                                     |
+        |            | - 0 = No Coordinates Set                            |
+        |            | - 1 = Latitude/Longitude                            |
+        |            | - 2 = State Plane/FIPS                              |
+        |            | - 3 = State Plane/ADS                               |
+        |            | - 4 = UTM                                           |
+        |            | - 5 = Local/other                                   |
+        +------------+-----------------------------------------------------+
+        | icdesc[1]  | Coordinate ID Number.                               |
+        +------------+-----------------------------------------------------+
+        | icdesc[2]  | Horizontal Datum Units.                             |
+        |            |                                                     |
+        |            | - 0 = Not Specified                                 |
+        |            | - 1 = English (ft or miles i guess?)                |
+        |            | - 2 = SI   (m or km?)                               |
+        |            | - 3 = Decimal degrees                               |
+        |            | - 4 = degrees, minutes, seconds                     |
+        +------------+-----------------------------------------------------+
+        | icdesc[3]  | Horizontal Datum.                                   |
+        |            |                                                     |
+        |            | - 0 = Unset                                         |
+        |            | - 1 = NAD83                                         |
+        |            | - 2 = NAD27                                         |
+        |            | - 3 = WAS84                                         |
+        |            | - 4 = WAS72                                         |
+        |            | - 5 = local/other                                   |
+        +------------+-----------------------------------------------------+
+        | icdesc[4]  | Unknown; default set to 0                           |
+        +------------+-----------------------------------------------------+
+        | icdesc[5]  | Unknown; default set to 0.                          |
+        +------------+-----------------------------------------------------+
+
+    csupp : str, default '', optional
+        Description of time series data.
+    ctzone : str, default '', optional
+        Time Zone Identification.
+    iplan : int, default 0, optional
+        Argument for writing over existing data according to the following
+        table from HECLIB documentation of 'ZSRTSX' [1]_.
+
+        +-------+-------------------------------------------------------+
+        | iplan | Description                                           |
+        +=======+=======================================================+
+        | 0     | Always write over existing data.                      |
+        +-------+-------------------------------------------------------+
+        | 1     | Only replace missing data flags in the record (-901). |
+        +-------+-------------------------------------------------------+
+        | 4     | If an input value is missing (-901), do not allow it  |
+        |       | to replace a non-missing value.                       |
+        +-------+-------------------------------------------------------+
+
+    Returns
+    -------
+    istat : None
+        Status indicator of writing operation with the following possible
+        returns as stated in the HECLIB documentation of 'ZSRTSX' [1]_.
+
+        +-------+---------------------------------------------------------+
+        | istat | Description                                             |
+        +=======+=========================================================+
+        | 0     | The data was successfully stored.                       |
+        +-------+---------------------------------------------------------+
+        | 4     | All of the input data provided were missing data flags  |
+        |       | (-901).                                                 |
+        +-------+---------------------------------------------------------+
+        | >10   | A "fatal" error occurred."                              |
+        +-------+---------------------------------------------------------+
+        | 11    | The number of values to store (nvals) is less than one. |
+        +-------+---------------------------------------------------------+
+        | 12    | Unrecognized time interval (E part).                    |
+        +-------+---------------------------------------------------------+
+        | 15    | The starting date or time is invalid.                   |
+        +-------+---------------------------------------------------------+
+        | 24    | The pathname given does not meet the regular-interval   |
+        |       | time series conventions.                                |
+        +-------+---------------------------------------------------------+
+        | 51    | Unrecognized data compression scheme.                   |
+        +-------+---------------------------------------------------------+
+        | 53    | Invalid precision exponent specified for the delta      |
+        |       | compression method. The precision exponent range is     |
+        |       | -6 to +6.                                               |
+        +-------+---------------------------------------------------------+
+
+    Notes
+    -----
+    Variables without the ``_input`` suffix are used directly into the
+    heclib_x64.dll ``'ZSRTSC_'`` function. Variables with ``_input`` suffix are
+    transformed before input into the heclib_x64.dll ``ZSRTSC_`` function.
+
+    Set missing values to -901.0.
+
+    The following table summarizes arguments for ``'ZSRTSC_'`` based on
+    information from HECLIB documentation of 'ZSRTSX' [1_] and source code in
+    DSSExcel.xlam [2]_.
+
+    +----------+----------+--------------+--------------+---------------------+
+    | Sequence | Argument | Data Type    | Input/Output | Description         |
+    +==========+==========+==============+==============+=====================+
+    | 1        | IFLTAB   | INTEGER(600) | INPUT        | The DSS work space  |
+    |          |          |              |              | used to manage the  |
+    |          |          |              |              | DSS file.           |
+    +----------+----------+--------------+--------------+---------------------+
+    | 2        | CPATH    | CHARACTER*80 | INPUT        | The pathname of the |
+    |          |          |              |              | data to store.      |
+    +----------+----------+--------------+--------------+---------------------+
+    | 3        | CDATE    | CHARACTER*20 | INPUT        | The beginning date  |
+    |          |          |              |              | of the time window. |
+    +----------+----------+--------------+--------------+---------------------+
+    | 4        | CTIME    | CHARACTER*4  | INPUT        | The beginning time  |
+    |          |          |              |              | of the time window. |
+    +----------+----------+--------------+--------------+---------------------+
+    | 5        | NVALS    | INTEGER      | INPUT        | The number of values|
+    |          |          |              |              | to store for        |
+    |          |          |              |              | SVALUES, defining   |
+    |          |          |              |              | the end of the time |
+    |          |          |              |              | window.             |
+    +----------+----------+--------------+--------------+---------------------+
+    | 6        | DOUBLE   | INTEGER      | INPUT        | The number of values|
+    |          |          |              |              | to store for        |
+    |          |          |              |              | DVALUES, defining   |
+    |          |          |              |              | the end of the time |
+    |          |          |              |              | window.             |
+    +----------+----------+--------------+--------------+---------------------+
+    | 7        | SVALUES  | REAL(NVALS)  | INPUT        | List of time series |
+    |          |          |              |              | values in sequential|
+    |          |          |              |              | order to be stored  |
+    |          |          |              |              | in single precision.|
+    +----------+----------+--------------+--------------+---------------------+
+    | 8        | DVALUES  | REAL(DOUBLE) | INPUT        | List of time series |
+    |          |          |              |              | values in sequential|
+    |          |          |              |              | order to be stored  |
+    |          |          |              |              | in double precision.|
+    +----------+----------+--------------+--------------+---------------------+
+    | 9        | JQUAL    | INTEGER      | INPUT        | Unknown, but likely |
+    |          |          |              |              | an array containing |
+    |          |          |              |              | thirty-two bit      |
+    |          |          |              |              | flags. Not stored if|
+    |          |          |              |              | LQUAL is false.     |
+    +----------+----------+--------------+--------------+---------------------+
+    | 10       | LQUAL    | LOGICAL      | INPUT        | Variable indicating |
+    |          |          |              |              | whether or not to   |
+    |          |          |              |              | store JQUAL.        |
+    +----------+----------+--------------+--------------+---------------------+
+    | 11       | CUNITS   | CHARACTER*8  | INPUT        | The units of the    |
+    |          |          |              |              | data (e.g., 'FEET').|
+    +----------+----------+--------------+--------------+---------------------+
+    | 12       | CTYPE    | CHARACTER*8  | INPUT        | The type of the data|
+    |          |          |              |              | (e.g., 'PER-AVER'). |
+    +----------+----------+--------------+--------------+---------------------+
+    | 13       | COORDS   | REAL         | INPUT        | Coordinates of the  |
+    |          |          |              |              | time series data.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 14       | NCOORDS  | INTEGER      | INPUT        | Length of COORDS.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 15       | ICDESC   | INTEGER      | INPUT        | Metadata for COORDS.|
+    +----------+----------+--------------+--------------+---------------------+
+    | 16       | NCDESC   | INTEGER      | INPUT        | Length of ICDESC.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 17       | CSUPP    | CHARACTER*80 | INPUT        | Description of the  |
+    |          |          |              |              | time series data.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 18       | ITZONE   | INTEGER      | INPUT        | Time offset in      |
+    |          |          |              |              | minutes from UTC.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 19       | CTZONE   | CHARACTER*30 | INPUT        | Time Zone ID.       |
+    +----------+----------+--------------+--------------+---------------------+
+    | 20       | IPLAN    | INTEGER      | INPUT        | Variable indicating |
+    |          |          |              |              | whether or not to   |
+    |          |          |              |              | write over existing |
+    |          |          |              |              | data.               |
+    +----------+----------+--------------+--------------+---------------------+
+    | 21       | JCOMP    | INTEGER      | INPUT        | Data compression    |
+    |          |          |              |              | method.             |
+    +----------+----------+--------------+--------------+---------------------+
+    | 22       | BASEV    | REAL         | INPUT        | Baseline value for  |
+    |          |          |              |              | data compression.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 23       | LBASEV   | LOGICAL      | INPUT        | Variable indicating |
+    |          |          |              |              | whether or not to   |
+    |          |          |              |              | store BASEV.        |
+    +----------+----------+--------------+--------------+---------------------+
+    | 24       | LDHIGH   | LOGICAL      | INPUT        | Setting for         |
+    |          |          |              |              | preallocating       |
+    |          |          |              |              | for data            |
+    |          |          |              |              | compression.        |
+    +----------+----------+--------------+--------------+---------------------+
+    | 25       | NPREC    | INTEGER      | INPUT        | Precision exponent  |
+    |          |          |              |              | for data            |
+    |          |          |              |              | compression.        |
+    +----------+----------+--------------+--------------+---------------------+
+    | 26       | ISTAT    | INTEGER      | OUTPUT       | Status parameter    |
+    |          |          |              |              | indicating success  |
+    |          |          |              |              | of storage.         |
+    +----------+----------+--------------+--------------+---------------------+
+    | 27       | L_Cpath  | INTEGER      | INPUT        | Length of CPATH.    |
+    +----------+----------+--------------+--------------+---------------------+
+    | 28       | L_CDate  | INTEGER      | INPUT        | Length of CDATE.    |
+    +----------+----------+--------------+--------------+---------------------+
+    | 29       | L_CTime  | INTEGER      | INPUT        | Length of CTIME.    |
+    +----------+----------+--------------+--------------+---------------------+
+    | 30       | L_CUnits | INTEGER      | INPUT        | Length of CUNITS.   |
+    +----------+----------+--------------+--------------+---------------------+
+    | 31       | L_CType  | INTEGER      | INPUT        | Length of CTYPE.    |
+    +----------+----------+--------------+--------------+---------------------+
+    | 32       | L_CSUPP  | INTEGER      | INPUT        | Length of CSUPP.    |
+    +----------+----------+--------------+--------------+---------------------+
+    | 33       | L_CTZONE | INTEGER      | INPUT        | Length of CTZONE.   |
+    +----------+----------+--------------+--------------+---------------------+
+
+    Stored data sets are without flags. For more information on flagging, see
+    HECLIB documentation, Appendix C [1]_.
+
+    Stored data is not compressed. For more information on data compression,
+    see HECLIB documentation, Chapter 10 [1]_.
+
+    References
+    ----------
+
+    The references below are formatted according to Chicago Manual of Style,
+    16th Edition.
+
+    .. [1] CEWRC-IWR-HEC. CPD-57.pdf. PDF. Davis, CA: US Army Corps of
+       Engineers Institute for Water Resources Hydrologic Engineering Center,
+       May 1991.
+       Title: "HECLIB Volume 2: HECDSS Subroutines, Programmer's Manual"
+       URL: http://www.hec.usace.army.mil/publications/ComputerProgramDocumentation/CPD-57.pdf
+       Accessed: 2018-10-04
+
+    .. [2] Steissberg, Todd. DSSExcel.xlam. Microsoft Excel XLAM. Davis, CA: US
+       Army Corps of Engineers Institute for Water Resources Hydrologic
+       Engineering Center, February 11, 2016. Title: "HEC-DSS MS Excel Data
+       Exchange"
+
+    """
+    # Get data length from 'vals' list.
+    nvals = len(vals)
+    # Get DLL function for Storing Regular-Interval Time Series Data
+    # (Extended Version).
+    zsrtsc = getattr(dsslib, 'ZSRTSC_')
+    # Initialize input declarations for function.
+    # ???: Is initialization required?
+    # <JAS 2018-10-02>
+    zsrtsc.argparse = []
+    # Set input declarations for function, mapped to DLL function variables.
+    # ???: Why is CPATH multiplied by 800 instead of 80?
+    # <JAS 2018-10-03>
+    zsrtsc.argparse = [C.c_long*600,  # IFLTAB
+                       C.c_char*800,  # CPATH
+                       C.c_char*20,   # CDATE
+                       C.c_char*4,    # CTIME
+                       C.c_long,      # NVALS
+                       C.c_long,      # DOUBLE
+                       (C.c_float*nvals)(),   # SVALUES
+                       (C.c_double*nvals)(),  # DVALUES
+                       C.c_long,      # JQUAL
+                       C.c_bool,      # LQUAL
+                       C.c_char*8,    # CUNITS
+                       C.c_char*8,    # CTYPE
+                       C.c_double,    # COORDS
+                       C.c_long,      # NCOORDS
+                       C.c_long,      # ICDESC
+                       C.c_long,      # NCDESC
+                       C.c_char*80,   # CSUPP
+                       C.c_long,      # ITZONE
+                       C.c_char*30,   # CTZONE
+                       C.c_long,      # IPLAN
+                       C.c_long,      # JCOMP
+                       C.c_float,     # BASEV
+                       C.c_bool,      # LBASEV
+                       C.c_bool,      # LDHIGH
+                       C.c_long,      # NPREC
+                       C.c_long,      # ISTAT
+                       C.c_long,      # L_CPATH  25
+                       C.c_long,      # L_CDATE  26
+                       C.c_long,      # L_CTIME  27
+                       C.c_long,      # L_CUNITS 28
+                       C.c_long,      # L_CTYPE  29
+                       C.c_long,      # L_CSUPP  30
+                       C.c_long]      # L_CTZONE 31
+    # Set return type of function to NoneType.
+    zsrtsc.restype = None
+    # Indicate that there are no flags in the data set.
+    jqual = [0 for i in range(nvals)]
+    lqual = False
+    # Set coordinates.
+    ncoords = len(coords)
+    # Set length of Coordinate System Info.
+    ncdesc = len(icdesc)
+    # Set Time Zone Offset.
+    # NOTE: Offset seems to be in minutes whereas milliseconds in HEC-DSS Vue.
+    # TODO: Set itzone given ctzone.
+    # <JAS 2018-10-05>
+    if ctzone == 'PST':
+        itzone = -420
+    else:
+        itzone = 0
+    # Set parameters for no data compression.
+    jcomp = 0
+    basev = 0
+    lbasev = False
+    ldhigh = False
+    nprec = 0
+    # Prepare function inputs. Distiguish function inputs with "_" suffix.
+    ifltab_ = ifltab
+    cpath_ = cpath.encode('ascii')
+    cdate_ = cdate.encode('ascii')
+    ctime_ = ctime.encode('ascii')
+    nvals_ = C.c_long(nvals)
+    double_ = C.c_long(nvals)
+    svalues_ = (C.c_float*nvals)(*vals)
+    dvalues_ = (C.c_double*nvals)(*vals)
+    jqual_ = (C.c_long*nvals)(*jqual)
+    lqual_ = C.c_bool(lqual)
+    cunits_ = cunits.encode('ascii')
+    ctype_ = ctype.encode('ascii')
+    coords_ = (C.c_double*3)(*coords)
+    ncoords_ = C.c_long(ncoords)
+    icdesc_ = (C.c_long*6)(*icdesc)
+    ncdesc_ = C.c_long(ncdesc)
+    csupp_ = csupp.encode('ascii')  # FUNCTION INPUT
+    itzone_ = C.c_long(itzone)
+    ctzone_ = ctzone.encode('ascii')
+    iplan_ = C.c_long(iplan)
+    jcomp_ = C.c_long(jcomp)
+    basev_ = C.c_float(basev)
+    lbasev_ = C.c_bool(lbasev)
+    ldhigh_ = C.c_bool(ldhigh)
+    nprec_ = C.c_long(nprec)
+    istat_ = C.c_long()
+    l_cpath_ = len(cpath_)
+    l_cdate_ = len(cdate_)
+    l_ctime_ = len(ctime_)
+    l_cunits_ = len(cunits_)
+    l_ctype_ = len(ctype_)
+    l_csupp_ = len(csupp_)
+    l_ctzone_ = len(ctzone_)
+    # Pass variables to DLL function.
+    zsrtsc(C.byref(ifltab_),
+           cpath_,
+           cdate_,
+           ctime_,
+           C.byref(nvals_),
+           C.byref(double_),
+           C.byref(svalues_),
+           C.byref(dvalues_),
+           C.byref(jqual_),
+           C.byref(lqual_),
+           cunits_,
+           ctype_,
+           C.byref(coords_),
+           C.byref(ncoords_),
+           C.byref(icdesc_),
+           C.byref(ncdesc_),
+           csupp_,
+           C.byref(itzone_),
+           ctzone_,
+           C.byref(iplan_),
+           C.byref(jcomp_),
+           C.byref(basev_),
+           C.byref(lbasev_),
+           C.byref(ldhigh_),
+           C.byref(nprec_),
+           C.byref(istat_),
+           l_cpath_,
+           l_cdate_,
+           l_ctime_,
+           l_cunits_,
+           l_ctype_,
+           l_csupp_,
+           l_ctzone_)
+    return istat_.value
+
+
 def create_catalog(ifltab, icunit, icdunt, inunit, cinstr, labrev, lsort): #, lcdcat, nrecs ):
     zcat = getattr(dsslib, 'ZCAT_')
     zcat.argparse = []
@@ -497,5 +929,10 @@ def get_catalog(fp):
         fortran_close_file(CATALOGUNIT)
         fortran_close_file(CONDUNIT)
         return([None, None, None])
-    
-    
+
+
+# %% Body
+if __name__ == '__main__':
+    msg = ('This module is intended to be imported for use into another '
+           + 'module. It is not intended to be run as a __main__ file.')
+    print(msg)

@@ -1,2 +1,5 @@
-# Don't track content of these folders
+# Don't track content of these folders.
 __pycache__/
+
+# Don't track DLLs.
+*.dll

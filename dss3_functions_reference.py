@@ -27,9 +27,9 @@ CATALOGUNIT=12
 CONDUNIT = 13
 
 
-#2018-09-04 (JAS): dll_path below modified to reference path on JAS's machine.
-dll_path = (r'C:\Users\jshannon\AppData\Roaming\New Excel DSS Add-In'
-            + r'\New DSS Add-in\Excel DSS Add-in V3.3 x64\heclib_x64.dll')
+# Set path of heclib_x64.dll.
+module_dir = os.path.dirname(__file__)
+dll_path = os.path.join(module_dir, r'bin\heclib_x64.dll')
 dsslib = C.cdll.LoadLibrary(dll_path)
 
 def open_dss(fpi):

@@ -1,5 +1,27 @@
-# Don't track content of these folders.
+# Folders #
+###########
+bin/
 __pycache__/
 
-# Don't track DLLs.
+# Logs, Data, and Databases #
+#############################
+*.log
+*.csv
+*.dss
+*.sql
+*.sqlite
+*.db
+*.xlsx
+
+# Compiled Source #
+###################
 *.dll
+*.pyc
+
+# Other #
+#########
+*.txt
+
+# Exceptions #
+##############
+!bin/README.rst

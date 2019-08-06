@@ -846,7 +846,7 @@ def write_regtsd(ifltab, cpath, cdate, ctime, vals, cunits, ctype,
     lbasev = False
     ldhigh = False
     nprec = 0
-    # Prepare function inputs. Distiguish function inputs with "_" suffix.
+    # Prepare function inputs. Distinguish function inputs with "_" suffix.
     ifltab_ = ifltab
     cpath_ = cpath.encode('ascii')
     cdate_ = cdate.encode('ascii')

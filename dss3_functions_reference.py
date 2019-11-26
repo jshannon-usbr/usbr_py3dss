@@ -38,27 +38,41 @@ global CONDUNIT
 CATALOGUNIT = 12
 CONDUNIT = 13
 # Set path of heclib_x64.dll.
-module_dir = os.path.dirname(__file__)
+module_dir = os.path.dirname(os.path.abspath(__file__))
 dll_path = os.path.join(module_dir, r'bin\heclib_x64.dll')
 dsslib = C.cdll.LoadLibrary(dll_path)
-
 
 # %% Define functions.
 def open_dss(fpi):
     r"""
     Summary
     -------
-    No documentation as of 2019-03-29.
+    Function to open a DSS file.
+
+    Notes
+    -----
+    Documentation needs improvement as of 2019-09-04. Parameters, returns, and
+    reference to documentation is missing.
 
     """
+    # Get function from DLL.
+    # ????: Should I use `dsslib.ZOPEN_` instead?
+    # <JAS 2019-09-04>
     zopen = getattr(dsslib, 'ZOPEN_')
+    # Declare input and output types.
     zopen.argparse = [C.c_long*600, C.c_char*800, C.c_long, C.c_long]
     zopen.restype = None
+    # Declare variables.
     ifltab = (C.c_long * 600)()
     iostat = C.c_long()
     #fp = (C.c_char*800)(*fpi)
     #print(fp)
-    zopen(C.byref(ifltab), fpi.encode('ascii'), C.byref(iostat), len(fpi.encode('ascii')))
+    # Pass parameters into DLL function.
+    zopen(C.byref(ifltab), fpi.encode('ascii'), C.byref(iostat),
+          len(fpi.encode('ascii')))
+    # Return indicator values.
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([ifltab, iostat.value])
 
 
@@ -66,12 +80,29 @@ def close_dss(ifltab):
     r"""
     Summary
     -------
-    No documentation as of 2019-03-29.
+    Function to close a DSS file.
+
+    Notes
+    -----
+    Documentation needs improvement as of 2019-09-04. Parameters, returns, and
+    reference to documentation is missing.
+
+    Questions
+    ---------
+    Is it possible to use the following syntax?
+
+    >>> with open('example.dss', 'r') as f:
 
     """
+    # Get function from DLL.
     zclose = getattr(dsslib, 'ZCLOSE_')
+    # Declare input types; keep output as default integer.
     zclose.argparse = [C.c_long*600]
+    # Call DLL function.
     stdout = zclose(ifltab)
+    # TODO: Add functionality to remove *.dsd, *dsk, and *.dsk files, if appropriate.
+    # <JAS 2019-09-04>
+    # Return indicator integer.
     return(stdout)
 
 
@@ -98,6 +129,8 @@ def dss_exists(fp):
     #print(lexist.value)
     #print(new_fp)
     #print(plen)
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([lexist.value, new_fp[0:].decode().strip()])
 
 
@@ -128,7 +161,8 @@ def read_regts(ifltab, cpath, cdate, ctime, nvalsi):
           ctime.encode('ascii'), C.byref(nvals), C.byref(vals), cunits, ctype,
           C.byref(iofset), C.byref(istat), len(cpath), len(cdate), len(ctime),
           len(cunits), len(ctype))
-
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([nvals.value, np.float32(vals), cunits[0:].decode('utf-8').strip(),
             ctype[0:].decode('utf-8').strip(), iofset.value, istat.value])
 
@@ -137,11 +171,25 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     r"""
     Summary
     -------
-    No summary as of 2019-03-29.
+    Function to read a regular time series with double precision from a opened
+    DSS file.
 
     Parameters
     ----------
-    No documentation of Parameters as of 2019-03-29.
+    As of 2019-09-04, documentation needs improvement.
+
+    ifltab : ????
+        [Description needed].
+    cpath : str
+        Pathname of DSS variable to query.
+    cdate : str
+        Start date of time frame to query.
+    ctime : int
+        Start time of time frame to query.
+    nvalsi : int
+        Number of regular time steps to query after `cdate` and `ctime`.
+    lgetdob_in : bool, default True, optional
+        [Description needed].
 
     Returns
     -------
@@ -174,15 +222,19 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     #      INTEGER|INTEGER |INTEGER| INTEGER | INTEGER | INTEGER | INTEGER  | INTEGER | INTEGER | INTEGER
 
     """
+    # Get DLL function.
     zrrtsc = getattr(dsslib, 'ZRRTSC_')
-    zrrtsc.argparse = [
-            C.c_long*600, C.c_char*800, C.c_char*20, C.c_char*4, C.c_long, C.c_long,  # IFLTAB, CPATH, CDATE, CTIME, KVALS, NVALS
-            C.c_bool, C.c_bool, C.c_float, C.c_double, C.c_long, C.c_bool, C.c_bool,  # LGETDOB, LFILDOB, sVALUES, dVALUES, JQUAL, LQUAL, LQREAD
-            C.c_char*8, C.c_char*8, C.c_char*80, C.c_long, C.c_long, C.c_long, C.c_char*30, C.c_double, # CUNITS, CTYPE, CSUPP, IOFSET, JCOMP, ITZONE, CTZONE, COORDS
-            C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long ] # ICDESC, LCOORDS< ISTAT, L_CPATH, L_CDATE, L_CTIME, L_CUNITS, L_CTYPE, L_CSUPP L_CTZONE
-
+    # Declare input and output types.
+    zrrtsc.argparse = [  # IFLTAB,       CPATH,        CDATE,       CTIME,      KVALS,    NVALS
+                           C.c_long*600, C.c_char*800, C.c_char*20, C.c_char*4, C.c_long, C.c_long,
+                         # LGETDOB,  LFILDOB,  sVALUES,   dVALUES,    JQUAL,    LQUAL,    LQREAD
+                           C.c_bool, C.c_bool, C.c_float, C.c_double, C.c_long, C.c_bool, C.c_bool,
+                         # CUNITS,     CTYPE,      CSUPP,       IOFSET,   JCOMP,    ITZONE,   CTZONE,      COORDS
+                           C.c_char*8, C.c_char*8, C.c_char*80, C.c_long, C.c_long, C.c_long, C.c_char*30, C.c_double,
+                         # ICDESC,   LCOORDS,  ISTAT,    L_CPATH,  L_CDATE,  L_CTIME,  L_CUNITS, L_CTYPE,  L_CSUPP,  L_CTZONE
+                           C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long, C.c_long ]
     zrrtsc.restype = None
-
+    # Declare variables.
     nvals = kvals = C.c_long(nvalsi)
     sVals = (C.c_float*nvalsi)()
     dVals = (C.c_double*nvalsi)()
@@ -202,11 +254,11 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     coords = (C.c_double*3)()
     icdesc = (C.c_long*6)()
     lcoords = C.c_bool()
-
+    # Encode string parameters.
     ecpath = cpath.encode('ascii')
     ecdate = cdate.encode('ascii')
     ectime = ctime.encode('ascii')
-
+    # Get length of string parameters.
     l_cpath = len(ecpath)
     l_cdate = len(ecdate)
     l_ctime = len(ectime)
@@ -214,13 +266,14 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     l_ctype = len(ctype)
     l_csupp = len(csupp)
     l_ctzone = len(ctzone)
-
+    # Pass parameters to DLL function.
     zrrtsc(ifltab, ecpath, ecdate, ectime, C.byref(kvals), C.byref(nvals), C.byref(lgetdob), C.byref(lfildob),   #8
            C.byref(sVals),  C.byref(dVals), C.byref(jqual), C.byref(lqual), C.byref(lqread),    #+5 = 13
            cunits, ctype, csupp, C.byref(iofset), C.byref(jcomp), C.byref(itzone),            #+6 = 19
            ctzone, C.byref(coords), C.byref(icdesc), C.byref(lcoords), C.byref(istat),        #+5 = 24
            l_cpath, l_cdate, l_ctime, l_cunits, l_ctype, l_csupp, l_ctzone)                   #7 = 31
-
+    # NOTE: JMG legacy notes regarding coordinate information.
+    # <JAS 2019-09-04>
     # icdesc is a 6-item list with information on the coordinates
     # icdesc[0] = Coordiante system: (following values follow the DSSVue convention - as far as I can tell though, you can use whatever scheme you want)
     #               0 = No coordinates set
@@ -247,7 +300,8 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
 
     # compile coordinate information into a single dictionary for clarity
     coords_info = icdesc_to_dict(coords, icdesc)
-
+    # NOTE: JAS legacy notes regarding I/O types from Excel DSS Add-In.
+    # <JAS 2019-09-04>
 #            ByVal strCDate As String, ByVal strCTime As String, _
 #            lngKVals As Long, lngNVals As Long, lngLGETDOB As Long, _
 #            lngLFILDOB As Long, sngValues As Single, dblValues As Double, _
@@ -259,7 +313,8 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
 #            lngISTAT As Long, ByVal lngL_CPath As Long, ByVal lngL_CDate As Long, _
 #            ByVal lngL_CTime As Long, ByVal lngL_CUnits As Long, _
 #            ByVal lngL_CType As Long, ByVal lngL_CSUPP As Long, ByVal lngL_CTZONE As Long
-
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([nvals.value, dVals, cunits[0:].decode('utf-8').strip(), ctype[0:].decode('utf-8').strip(),
             iofset.value, istat.value, csupp[0:].decode('utf-8'), coords_info, ctzone[0:].decode('utf-8'), jqual, lfildob, itzone])
 
@@ -360,6 +415,8 @@ def open_catalog(fp, icunitin, lgenca_in=True, lgencd_in=False):
            C.byref(lopnca), C.byref(lcatlg), C.byref(icdunt), C.byref(lgencd),
            C.byref(lopncd), C.byref(lcatcd), C.byref(nrecs),
            len(fp.encode('ascii')))
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([lgenca.value, lopnca.value, lcatlg.value, lgencd.value,
             lopncd.value, lcatcd.value, nrecs.value])
 
@@ -408,6 +465,8 @@ def read_catalog(lopnca, icunitin=12):
         lopnca= False
     else:
         lopnca= True
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([path_list, lopnca])
 
 
@@ -499,7 +558,8 @@ def write_regts(ifltab, cpath, cdate, ctime, nvalsi, valsi, cunits, ctype,
           cunits.encode('ascii'), ctype.encode('ascii'), C.byref(IPLAN),
           C.byref(istat), len(cpath), len(cdate), len(ctime), len(cunits),
           len(ctype))
-
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([istat])
 
 
@@ -946,6 +1006,8 @@ def create_catalog(ifltab, icunit, icdunt, inunit, cinstr, labrev, lsort): #, lc
     zcat(C.byref(ifltab), C.byref(icunit), C.byref(icdunt), C.byref(inunit),
          cinstr, C.byref(labrev), C.byref(lsort), C.byref(lcdcat),
          C.byref(nrecs), len(cinstr))
+    # TODO: Change output from list to tuple.
+    # <JAS 2019-09-04>
     return([lcdcat.value, nrecs.value])
 
 
@@ -973,15 +1035,28 @@ def get_catalog(fp):
     try:
         os.remove(dskfp)
     except:
-        print("\n-------------------------------------------------------------\n"+ \
-              "Could not remove the *dsk file - it is locked\nfor use by a previous " +\
-              "call of this function \nor another system process (Excel add-in, I'm looking at you...)\n\n" +\
-              "---DO NOT MODIFY THE CATALOG FILES (*.dsc, *.dsd) \n---WHILE RUNNING THIS PYTHON SESSION!!!\n" +\
-              "================================================================\n")
+        msg = ("\n"
+               "--------------------------------------------------------------"
+               "\n"
+               "Could not remove the *dsk file - it is locked"
+               "\n"
+               "for use by a previous call of this function"
+               "\n"
+               "or another system process (possibly by the Excel add-in)."
+               "\n\n"
+               "---DO NOT MODIFY THE CATALOG FILES (*.dsc, *.dsd)"
+               "\n"
+               "---WHILE RUNNING THIS PYTHON SESSION!!!"
+               "\n"
+               "=============================================================="
+               "\n")
+        print(msg)
 
     [ifltab, iostat] = open_dss(fp)  #open the DSS file to start
     if iostat != 0:
         print("couldn't open the dss file - exiting now...")
+        # TODO: Change output from list to tuple.
+        # <JAS 2019-09-04>
         return([None, None, None])
 
     dscfp = os.path.join(os.path.dirname(fp), os.path.basename(fp)[:-1]+'c')
@@ -993,6 +1068,8 @@ def get_catalog(fp):
 
     if not lopnca:
         print("Couldn't open catalog - something is not right...exiting..")
+        # TODO: Change output from list to tuple.
+        # <JAS 2019-09-04>
         return([None,None, None])
     else:
         NStdCatRecs = NCatalogedRecs = nrecs
@@ -1026,23 +1103,29 @@ def get_catalog(fp):
             fortran_close_file(CATALOGUNIT)
             fortran_close_file(CONDUNIT)
             close_dss(ifltab)
+            # TODO: Change output from list to tuple.
+            # <JAS 2019-09-04>
             return([None, None, None])
         else:
             [pathlist, lopnca] = read_catalog(lopnca, icunitin=CATALOGUNIT)
             close_dss(ifltab)
             fortran_close_file(CATALOGUNIT)
             fortran_close_file(CONDUNIT)
+            # TODO: Change output from list to tuple.
+            # <JAS 2019-09-04>
             return([pathlist, nrecs, lopnca])
     else:
         print("Couldn't create a catalog for some reason...exiting")
         close_dss(ifltab)
         fortran_close_file(CATALOGUNIT)
         fortran_close_file(CONDUNIT)
+        # TODO: Change output from list to tuple.
+        # <JAS 2019-09-04>
         return([None, None, None])
 
 
-# %% Establish Code Body.
+# %% Execute script.
 if __name__ == '__main__':
     msg = ('This module is intended to be imported for use into another '
-           + 'module. It is not intended to be run as a __main__ file.')
+           'module. It is not intended to be run as a __main__ file.')
     print(msg)

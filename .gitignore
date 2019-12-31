@@ -1,6 +1,5 @@
 # Folders #
 ###########
-bin/
 __pycache__/
 
 # Logs, Data, and Databases #
@@ -8,6 +7,8 @@ __pycache__/
 *.log
 *.csv
 *.dss
+*.dsc
+*.dsk
 *.sql
 *.sqlite
 *.db
@@ -24,4 +25,4 @@ __pycache__/
 
 # Exceptions #
 ##############
-!bin/README.rst
+!bin/heclib_x64.dll

@@ -49,10 +49,21 @@ def open_dss(fpi):
     -------
     Function to open a DSS file.
 
+    Parameters
+    ----------
+    fpi : path
+        Absolute or relative path reference to DSS file.
+
+    Returns
+    -------
+    ifltab : c_long_Array_600
+        Array reference to DSS file for interpretation by `dsslib`.
+    iostat.value : int
+        Unknown; possibly success indicator.
+
     Notes
     -----
-    Documentation needs improvement as of 2019-09-04. Parameters, returns, and
-    reference to documentation is missing.
+    Documentation needs improvement as of 2020-02-12.
 
     """
     # Get function from DLL.
@@ -81,6 +92,17 @@ def close_dss(ifltab):
     Summary
     -------
     Function to close a DSS file.
+
+    Parameters
+    ----------
+    ifltab : c_long_Array_600
+        Array reference to DSS file for interpretation by `dsslib`. It is the
+        first return of `open_dss`.
+
+    Returns
+    -------
+    stdout : ????
+        Unknown; possibly success indicator.
 
     Notes
     -----
@@ -178,14 +200,15 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
     ----------
     As of 2019-09-04, documentation needs improvement.
 
-    ifltab : ????
-        [Description needed].
+    ifltab : c_long_Array_600
+        Array reference to DSS file for interpretation by `dsslib`. It is the
+        first return of `open_dss`.
     cpath : str
-        Pathname of DSS variable to query.
+        Pathname of DSS variable to query. Format is '/A/B/C//E/F/'.
     cdate : str
-        Start date of time frame to query.
+        Start date of time frame to query. Format is 'DDMMMYYYY'.
     ctime : int
-        Start time of time frame to query.
+        Start time of time frame to query. Format is 'HHMM'.
     nvalsi : int
         Number of regular time steps to query after `cdate` and `ctime`.
     lgetdob_in : bool, default True, optional
@@ -193,21 +216,23 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
 
     Returns
     -------
-    - 0 : nvals.value
-    - 1 : dVals
-    - 2 : cunits[0:].decode('utf-8').strip()
-    - 3 : ctype[0:].decode('utf-8').strip()
-    - 4 : iofset.value
-    - 5 : istat.value
-    - 6 : csupp[0:].decode('utf-8')
-    - 7 : coords_info
-    - 8 : ctzone[0:].decode('utf-8')
-    - 9 : jqual
-    - 10 : lfildob
-    - 11 : itzone
+    _ : list
+        - Index 0 : nvals.value
+        - Index 1 : dVals
+        - Index 2 : cunits[0:].decode('utf-8').strip()
+        - Index 3 : ctype[0:].decode('utf-8').strip()
+        - Index 4 : iofset.value
+        - Index 5 : istat.value
+        - Index 6 : csupp[0:].decode('utf-8')
+        - Index 7 : coords_info
+        - Index 8 : ctzone[0:].decode('utf-8')
+        - Index 9 : jqual
+        - Index 10 : lfildob
+        - Index 11 : itzone
 
     Notes
     -----
+    1. Below are legacy notes:
     # Args: (IFLTAB(600)  | CPATH*80   | CDATE   | CTIME   | KVALS   | NVALS   |
     #        INPUT        | INPUT      | INPUT   | INPUT   | INPUT   | OUTPUT   | OUTPUT    | OUTPUT | OUTPUT    | OUTPUT)
     # DTYPE:(INTEGER(600) | CHAR*80    | CHAR*20 | CHAR*4  | INTEGER | INTEGER |
@@ -220,6 +245,7 @@ def read_regtsd(ifltab, cpath, cdate, ctime, nvalsi, lgetdob_in=True):
 
     #Args: ICDESC |LCOORDS | ISTAT | L_CPATH | L_CDATE | L_CTIME | L_CUNITS | L_CTYPE | L_CSUPP | L_CTZONE)
     #      INTEGER|INTEGER |INTEGER| INTEGER | INTEGER | INTEGER | INTEGER  | INTEGER | INTEGER | INTEGER
+    2. Needs further documentation as of 2020-02-12.
 
     """
     # Get DLL function.
@@ -583,7 +609,8 @@ def write_regtsd(ifltab, cpath, cdate, ctime, vals, cunits, ctype,
         Starting date of regular time series in "DDMMMYYYY" format. If the year
         is in the 1900s, date can be in "DDMMMYY" format.
     ctime : str
-        Time since midnight of starting date.
+        Time since midnight of starting date. Midnight is designated as '2400'
+        rather than ISO standard of '0000'. Format is 'HHMM'.
     vals : list of float
         Sequential list of regular time series.
     cunits : str
